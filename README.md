@@ -146,7 +146,3 @@ The plugin can only see string variables, for now, so, the fields must be conver
 Also, it can be configured variables using the data source as well, with custom SQL that returns only one column:
 
 ![Grafana query editor](example/images/query-variable.png)
-
-And then using it on the query editor and dashboards using the dropdown variable:
-
-![Grafana query editor](example/images/query-preview-variable.png)

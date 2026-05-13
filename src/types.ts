@@ -14,7 +14,13 @@ export interface MyDataSourceOptions extends DataSourceJsonData {
   o_port?: number;
   o_service?: string;
   o_sid?: string;
+  o_tlsEnabled?: boolean;
   o_user?: string;
+
+  // Wallet settings
+  o_walletMode?: boolean;
+  o_walletTnsAlias?: string;
+  o_walletUploaded?: boolean;
 };
 
 /**
@@ -22,4 +28,6 @@ export interface MyDataSourceOptions extends DataSourceJsonData {
  */
 export interface MySecureJsonData {
   o_password?: string;
+  o_walletPassword?: string;
+  o_walletZip?: string;
 };

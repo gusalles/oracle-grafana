@@ -1,14 +1,14 @@
 package plugin
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
-	"io"
-	"time"
 	"fmt"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	go_ora "github.com/sijms/go-ora/v2"
 )
 
 type OracleDatasourceQuery struct {
@@ -26,9 +26,9 @@ type OracleDatasourceInfo struct {
 }
 
 type OracleDatasourceColumn struct {
-	name   string
+	name     string
 	dataType string
-	values []any
+	values   []any
 }
 
 type OracleDatasourceResult struct {
@@ -36,73 +36,79 @@ type OracleDatasourceResult struct {
 	columns []OracleDatasourceColumn
 }
 
-func (q *OracleDatasourceQuery) MakeQuery(c *OracleDatasourceConnection, from time.Time, to time.Time) OracleDatasourceResult {
-	result := OracleDatasourceResult{nil, []OracleDatasourceColumn{}}
+func (q *OracleDatasourceQuery) MakeQuery(c *OracleDatasourceConnection, from time.Time, to time.Time) (result OracleDatasourceResult) {
+	result = OracleDatasourceResult{nil, []OracleDatasourceColumn{}}
 
-	if c.IsConnected() {
-		stmt, err := c.connection.Prepare(q.O_parsed)
+	// Recover from any panics in the go-ora driver to prevent crashing the plugin process
+	defer func() {
+		if r := recover(); r != nil {
+			log.DefaultLogger.Error("Recovered from panic during query execution", "panic", fmt.Sprintf("%v", r), "query", q.O_parsed)
+			result.err = fmt.Errorf("internal error during query execution: %v", r)
+			// Mark connection as broken so the next request will reconnect
+			c.connection = nil
+		}
+	}()
+
+	if c.connection == nil {
+		result.err = fmt.Errorf("database connection is not available")
+		log.DefaultLogger.Error("Query attempted on disconnected database")
+		return result
+	}
+
+	// Create a context with timeout for the query (30 seconds default)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	drRows, err := c.connection.QueryContext(ctx, q.O_parsed, nil)
+	if err != nil {
+		log.DefaultLogger.Error("Error querying SQL: ", err)
+		result.err = err
+		return result
+	}
+
+	rows, ok := drRows.(*go_ora.DataSet)
+	if !ok {
+		result.err = fmt.Errorf("unexpected rows type: %T", drRows)
+		return result
+	}
+	defer rows.Close()
+
+	columnNames := rows.Columns()
+	typeMap := make(map[string]string)
+	for i, name := range columnNames {
+		typename := GetDataTypeByType(rows.ColumnTypeScanType(i))
+		log.DefaultLogger.Debug(fmt.Sprintf("column: %v, dataType:%v", name, typename))
+		typeMap[name] = typename
+		result.columns = append(result.columns, OracleDatasourceColumn{name, typename, []any{}})
+	}
+	log.DefaultLogger.Debug("Oracle query fetch: ", "columns", columnNames)
+
+	scannedValues := make([]interface{}, len(columnNames))
+	scanArgs := make([]interface{}, len(columnNames))
+	for i := range scanArgs {
+		scanArgs[i] = &scannedValues[i]
+	}
+
+	for rows.Next_() {
+		err := rows.Scan(scanArgs...)
 		if err != nil {
-			log.DefaultLogger.Error("Error preparing SQL: ", err)
-			result.err = err
-			return result
+			log.DefaultLogger.Error("Error scanning row: ", err)
+			break
 		}
-		defer stmt.Close()
-
-		rows, err := stmt.Query()
-		if err != nil {
-			log.DefaultLogger.Error("Error querying SQL: ", err)
-			result.err = err
-			return result
-		}
-		defer rows.Close()
-
-		columnTypes, err := rows.ColumnTypes()
-		columns := []string{}
-		typeMap := make(map[string]string)
-		if err != nil {
-			log.DefaultLogger.Error("Error fetching columns: ", err)
-			result.err = err
-			return result
-		} else {
-		    for _, column := range columnTypes {
-		        name := column.Name()
-		        typename := GetDataTypeByType(column.ScanType())
-		        log.DefaultLogger.Debug(fmt.Sprintf("column: %v, dataType:%v", name, typename))
-
-		        typeMap[name] = typename
-		        columns = append(columns, name)
-		        result.columns = append(result.columns, OracleDatasourceColumn{name, typename, []any{}})
-		    }
-		}
-		log.DefaultLogger.Debug("Oracle query fetch: ", "columns", columns)
-
-		sacnValues := make([]sql.RawBytes, len(columns))
-		scanArgs := make([]interface{}, len(columns))
-		for i := range scanArgs {
-			scanArgs[i] = &sacnValues[i]
-		}
-
-		for rows.Next() {
-			err := rows.Scan(scanArgs...)
-			if err != nil {
-				log.DefaultLogger.Error("Error scanning row: ", err)
-				break
+		for index, val := range scannedValues {
+			if val != nil {
+				dataType := typeMap[result.columns[index].name]
+				convertedValue := ConvertNativeValue(val, dataType)
+				result.columns[index].values = append(result.columns[index].values, convertedValue)
+			} else {
+				result.columns[index].values = append(result.columns[index].values, nil)
 			}
-			for index, scannedValue := range sacnValues {
-				if scannedValue != nil {
-				    dataType := typeMap[result.columns[index].name]
-				    convertedValue := ConvertValue(scannedValue, dataType)
-					result.columns[index].values = append(result.columns[index].values, convertedValue)
-				} else {
-					result.columns[index].values = append(result.columns[index].values, nil)
-				}
-			}
 		}
+	}
 
-		if rows.Err() != nil && rows.Err() != io.EOF {
-			result.err = err
-			log.DefaultLogger.Error("Error fetching row: ", err)
-		}
+	if rows.Err() != nil {
+		result.err = rows.Err()
+		log.DefaultLogger.Error("Error fetching rows: ", rows.Err())
 	}
 
 	log.DefaultLogger.Debug("Oracle query: ", "result", result)

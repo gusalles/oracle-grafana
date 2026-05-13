@@ -1,4 +1,3 @@
-version: "3.5"
 
 services:
   grafana:
@@ -7,7 +6,10 @@ services:
       - oracle
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_LOG_LEVEL: debug
+      GF_DEFAULT_APP_MODE: development
+      GF_PATHS_DATA: /var/lib/grafana
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: albertowd-oraclegrafana-datasource
     image: grafana/grafana:latest
     ports:
@@ -15,6 +17,7 @@ services:
     restart: always
     volumes:
       - ./dist:/var/lib/grafana/plugins/albertowd-oraclegrafana-datasource:ro
+      - grafana-data:/var/lib/grafana
   
   oracle:
     container_name: development-oracle
@@ -26,3 +29,6 @@ services:
     restart: always
     volumes:
       - ./example/database:/opt/oracle/scripts/startup:ro
+
+volumes:
+  grafana-data:

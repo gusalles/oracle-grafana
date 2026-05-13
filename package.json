@@ -5,13 +5,34 @@
     "url": "https://albertowd.dev"
   },
   "dependencies": {
-    "@emotion/css": "^11.1.3",
-    "@grafana/data": "9.5.3",
-    "@grafana/runtime": "9.5.3",
-    "@grafana/ui": "9.5.3",
-    "react": "17.0.2",
-    "react-dom": "17.0.2",
+    "@emotion/css": "11.13.5",
+    "@grafana/data": "11.6.1",
+    "@grafana/runtime": "11.6.1",
+    "@grafana/ui": "11.6.1",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
     "tslib": "2.5.3"
+  },
+  "overrides": {
+    "@emotion/css": {
+      "yaml": "^2.8.3"
+    },
+    "@grafana/ui": {
+      "react-router": "^6.30.2",
+      "@remix-run/router": "^1.23.2",
+      "lodash": "4.17.21",
+      "yaml": "^2.8.3",
+      "immutable": "5.1.5"
+    },
+    "@grafana/data": {
+      "lodash": "4.17.21",
+      "yaml": "^2.8.3",
+      "dompurify": "^3.3.2"
+    },
+    "@grafana/runtime": {
+      "lodash": "4.17.21",
+      "yaml": "^2.8.3"
+    }
   },
   "description": "An oracle database datasource for grafana",
   "devDependencies": {
@@ -21,11 +42,12 @@
     "@swc/core": "^1.3.62",
     "@swc/helpers": "^0.5.0",
     "@swc/jest": "^0.2.26",
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/react": "^12.1.4",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "14.3.1",
     "@types/jest": "^29.5.0",
     "@types/lodash": "^4.14.194",
     "@types/node": "^18.15.11",
+    "bestzip": "^2.2.1",
     "copy-webpack-plugin": "^11.0.0",
     "css-loader": "^6.7.3",
     "eslint-webpack-plugin": "^4.0.1",
@@ -52,19 +74,19 @@
   },
   "license": "Apache-2.0",
   "name": "oracle-grafana",
-  "packageManager": "npm@9.8.0",
+  "version": "2.1.2",
   "scripts": {
-    "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
     "dev": "webpack -c ./.config/webpack/webpack.config.ts --env development",
+    "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
+    "server": "bash ./scripts/bundle-to-dev.sh",
+    "bundle": "bash ./scripts/bundle-to-release.sh",
     "e2e": "npm exec cypress install && npm exec grafana-e2e run",
     "e2e:update": "npm exec cypress install && npm exec grafana-e2e run --update-screenshots",
     "lint": "eslint --cache --ignore-path ./.gitignore --ext .js,.jsx,.ts,.tsx .",
     "lint:fix": "npm run lint -- --fix",
     "sign": "npx --yes @grafana/sign-plugin@latest",
-    "server": "docker-compose up --build",
     "test": "jest --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit"
-  },
-  "version": "1.0.1"
+  }
 }

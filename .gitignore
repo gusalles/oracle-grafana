@@ -36,3 +36,5 @@ e2e-results/
 
 # Custom
 *.tar.gz
+*.zip
+albertowd-oraclegrafana-datasource/
